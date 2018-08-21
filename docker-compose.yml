@@ -1,0 +1,130 @@
+---
+version: "3.1"
+services:
+  rdbms:
+    image: postgres:10.5
+    environment:
+      POSTGRES_USER: quantum
+      POSTGRES_PASSWORD: quantum
+    volumes:
+    - "./var/pgsql:/var/lib/postgresql/data"
+    - "./src/rdbms:/docker-entrypoint-initdb.d:ro"
+    #ports:
+    #- "127.0.0.1:5432:5432"
+
+  quantum_broker:
+    image: rmohr/activemq:5.10.0
+    environment:
+      ACTIVEMQ_DATA: /var/lib/activemq/data
+    volumes:
+    - "./var/activemq:/var/lib/activemq/data"
+    expose:
+    - "5672"
+    - 8161
+    ports:
+    - "127.0.0.1:8161:8161"
+    - "127.0.0.1:5673:5672"
+
+  quantum_router:
+    image: wizardsofindustry/aorta-router:latest
+    environment:
+      AORTA_LOGLEVEL: DEBUG
+      AORTA_ROUTES: "/etc/aorta/routes.conf.d/*"
+      AORTA_UPSTREAM: quantum_broker:5672
+    volumes:
+    - "./etc/aorta/routes.conf.d:/etc/aorta/routes.conf.d:ro"
+    depends_on:
+    - quantum_broker
+
+  quantum_publisher:
+    image: wizardsofindustry/aorta-publisher:latest
+    environment:
+    - AORTA_UPSTREAM=amqp://quantum_broker:5672/aorta.ingress
+    - AORTA_LOGLEVEL=WARNING
+    - AORTA_SPOOL=/var/spool/aorta
+    volumes:
+    - "./var/aorta/publisher:/var/spool/aorta"
+    depends_on:
+    - quantum_broker
+
+  citadel_challenger:
+    image: &CITADEL_CHALLENGER_IMAGE wizardsofindustry/quantum-challenger:1.0.1
+    environment:
+    - QUANTUM_DEPLOYMENT_ENV=purple
+    - CHALLENGER_DEBUG=1
+    - CHALLENGER_RDBMS_DSN=postgresql+psycopg2://quantum:quantum@rdbms/challenger
+    - MESSAGEBIRD_ACCESS_KEY
+    expose:
+    - 8443
+    ports:
+    - "9003:8443"
+    depends_on:
+    - rdbms
+
+  citadel_usr:
+    image: wizardsofindustry/quantum-usr:1.0.2
+    environment:
+    - QUANTUM_DEPLOYMENT_ENV=purple
+    - USR_DEBUG=1
+    - USR_RDBMS_DSN=postgresql+psycopg2://quantum:quantum@rdbms/usr
+    volumes:
+    - "./var/aorta/publisher:/var/spool/aorta"
+    expose:
+    - 8443
+    ports:
+    - "9001:8443"
+    depends_on:
+    - rdbms
+
+  citadel_safi:
+    image: wizardsofindustry/quantum-safi:1.1.0
+    environment:
+    - QUANTUM_DEPLOYMENT_ENV=purple
+    - SAFI_DEBUG=1
+    - SAFI_RDBMS_DSN=postgresql+psycopg2://quantum:quantum@rdbms/safi
+    volumes:
+    - "./var/aorta/publisher:/var/spool/aorta"
+    expose:
+    - 8443
+    ports:
+    - "9002:8443"
+    depends_on:
+    - rdbms
+
+  citadel_challenger_migrations:
+    image: *CITADEL_CHALLENGER_IMAGE
+    entrypoint: ""
+    command: bash -c "sleep 20; ./bin/docker-entrypoint"
+    environment:
+    - QUANTUM_DEPLOYMENT_ENV=purple
+    - CHALLENGER_DEBUG=1
+    - CHALLENGER_RDBMS_DSN=postgresql+psycopg2://quantum:quantum@rdbms/challenger
+    - CHALLENGER_RUNTIME=migrations
+    depends_on:
+    - rdbms
+
+  citadel_safi_migrations:
+    image: wizardsofindustry/quantum-safi:1.1.0
+    entrypoint: ""
+    command: bash -c "sleep 20; ./bin/docker-entrypoint"
+    environment:
+    - QUANTUM_DEPLOYMENT_ENV=purple
+    - SAFI_DEBUG=1
+    - SAFI_RDBMS_DSN=postgresql+psycopg2://quantum:quantum@rdbms/safi
+    - SAFI_RUNTIME=migrations
+    depends_on:
+    - rdbms
+
+  citadel_gateway:
+    image: wizardsofindustry/quantum-citadel:latest
+    environment:
+    - "TLS_PROTOCOLS=TLSv1.3 TLSv1.2 TLSv1.1"
+    - "CITADEL_SERVICES=challenger:safi:usr"
+    expose:
+    - 443
+    ports:
+    - "127.0.0.1:9000:443"
+    depends_on:
+    - citadel_challenger
+    - citadel_safi
+    - citadel_usr
