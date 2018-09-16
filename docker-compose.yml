@@ -48,12 +48,12 @@ services:
     - quantum_broker
 
   citadel_challenger:
-    image: &CITADEL_CHALLENGER_IMAGE wizardsofindustry/quantum-challenger:1.0.1
+    image: &CITADEL_CHALLENGER_IMAGE wizardsofindustry/quantum-challenger:1.0.3
     environment:
     - QUANTUM_DEPLOYMENT_ENV=purple
     - CHALLENGER_DEBUG=1
     - CHALLENGER_RDBMS_DSN=postgresql+psycopg2://quantum:quantum@rdbms/challenger
-    - MESSAGEBIRD_ACCESS_KEY
+    - CHALLENGER_MESSAGEBIRD_ACCESS_KEY=${MESSAGEBIRD_ACCESS_KEY}
     expose:
     - 8443
     ports:
@@ -61,23 +61,8 @@ services:
     depends_on:
     - rdbms
 
-  citadel_usr:
-    image: wizardsofindustry/quantum-usr:1.0.2
-    environment:
-    - QUANTUM_DEPLOYMENT_ENV=purple
-    - USR_DEBUG=1
-    - USR_RDBMS_DSN=postgresql+psycopg2://quantum:quantum@rdbms/usr
-    volumes:
-    - "./var/aorta/publisher:/var/spool/aorta"
-    expose:
-    - 8443
-    ports:
-    - "9001:8443"
-    depends_on:
-    - rdbms
-
   citadel_safi:
-    image: wizardsofindustry/quantum-safi:1.1.0
+    image: &CITADEL_SAFI_IMAGE wizardsofindustry/quantum-safi:1.2.4
     environment:
     - QUANTUM_DEPLOYMENT_ENV=purple
     - SAFI_DEBUG=1
@@ -88,6 +73,21 @@ services:
     - 8443
     ports:
     - "9002:8443"
+    depends_on:
+    - rdbms
+
+  citadel_usr:
+    image: &CITADEL_USR_IMAGE wizardsofindustry/quantum-usr:1.0.6
+    environment:
+    - QUANTUM_DEPLOYMENT_ENV=purple
+    - USR_DEBUG=1
+    - USR_RDBMS_DSN=postgresql+psycopg2://quantum:quantum@rdbms/usr
+    volumes:
+    - "./var/aorta/publisher:/var/spool/aorta"
+    expose:
+    - 8443
+    ports:
+    - "9001:8443"
     depends_on:
     - rdbms
 
@@ -104,7 +104,7 @@ services:
     - rdbms
 
   citadel_safi_migrations:
-    image: wizardsofindustry/quantum-safi:1.1.0
+    image: *CITADEL_SAFI_IMAGE
     entrypoint: ""
     command: bash -c "sleep 20; ./bin/docker-entrypoint"
     environment:
@@ -112,6 +112,18 @@ services:
     - SAFI_DEBUG=1
     - SAFI_RDBMS_DSN=postgresql+psycopg2://quantum:quantum@rdbms/safi
     - SAFI_RUNTIME=migrations
+    depends_on:
+    - rdbms
+
+  citadel_usr_migrations:
+    image: *CITADEL_USR_IMAGE
+    entrypoint: ""
+    command: bash -c "sleep 20; ./bin/docker-entrypoint"
+    environment:
+    - QUANTUM_DEPLOYMENT_ENV=purple
+    - USR_DEBUG=1
+    - USR_RDBMS_DSN=postgresql+psycopg2://quantum:quantum@rdbms/usr
+    - USR_RUNTIME=migrations
     depends_on:
     - rdbms
 
