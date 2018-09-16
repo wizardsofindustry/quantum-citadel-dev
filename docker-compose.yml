@@ -91,7 +91,7 @@ services:
     - rdbms
 
   citadel_usr:
-    image: &CITADEL_USR_IMAGE wizardsofindustry/quantum-usr:1.0.6
+    image: &CITADEL_USR_IMAGE wizardsofindustry/quantum-usr:1.0.7
     environment:
     - QUANTUM_DEPLOYMENT_ENV=purple
     - USR_DEBUG=1
