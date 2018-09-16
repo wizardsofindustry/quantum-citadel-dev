@@ -61,6 +61,20 @@ services:
     depends_on:
     - rdbms
 
+  citadel_idin:
+    image: &CITADEL_IDIN_IMAGE wizardsofindustry/quantum-idin:1.0.0
+    environment:
+    - QUANTUM_DEPLOYMENT_ENV=purple
+    - IDIN_DEBUG=1
+    - IDIN_RDBMS_DSN=postgresql+psycopg2://quantum:quantum@rdbms/idin
+    - IDIN_CM_MERCHANT_TOKEN=${IDIN_CM_MERCHANT_TOKEN}
+    expose:
+    - 8443
+    ports:
+    - "9004:8443"
+    depends_on:
+    - rdbms
+
   citadel_safi:
     image: &CITADEL_SAFI_IMAGE wizardsofindustry/quantum-safi:1.2.4
     environment:
@@ -103,6 +117,18 @@ services:
     depends_on:
     - rdbms
 
+  citadel_idin_migrations:
+    image: *CITADEL_IDIN_IMAGE
+    entrypoint: ""
+    command: bash -c "sleep 20; ./bin/docker-entrypoint"
+    environment:
+    - QUANTUM_DEPLOYMENT_ENV=purple
+    - IDIN_DEBUG=1
+    - IDIN_RDBMS_DSN=postgresql+psycopg2://quantum:quantum@rdbms/idin
+    - IDIN_RUNTIME=migrations
+    depends_on:
+    - rdbms
+
   citadel_safi_migrations:
     image: *CITADEL_SAFI_IMAGE
     entrypoint: ""
@@ -131,12 +157,13 @@ services:
     image: wizardsofindustry/quantum-citadel:latest
     environment:
     - "TLS_PROTOCOLS=TLSv1.3 TLSv1.2 TLSv1.1"
-    - "CITADEL_SERVICES=challenger:safi:usr"
+    - "CITADEL_SERVICES=challenger:idin:safi:usr"
     expose:
     - 443
     ports:
     - "127.0.0.1:9000:443"
     depends_on:
     - citadel_challenger
+    - citadel_idin
     - citadel_safi
     - citadel_usr
